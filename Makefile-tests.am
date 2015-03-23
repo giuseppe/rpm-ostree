@@ -1,12 +1,49 @@
 include $(top_srcdir)/buildutil/glib-tap.mk
 
+# Needed by the compose test
+
+tests/compose/pseudo/Makefile: tests/compose/pseudo/configure
+	(cd tests/compose/pseudo; ./configure --bits=64 --prefix=/usr)
+
+tests/compose/pseudo/bin/pseudo: tests/compose/pseudo/Makefile
+	(cd tests/compose/pseudo; $(MAKE))
+
+tests/compose/libshadow.so: tests/compose/libshadow.c
+	$(CC) -fPIC -shared $< -o $@
+
+tests/compose/yum/empty: tests/compose/yum/empty.c
+	$(CC) -nostdlib  $< -o $@
+
+tests/compose/yum/repodata/repomd.xml: tests/compose/yum/empty tests/compose/yum/empty.spec
+	(cd tests/compose/yum && \
+	rpmbuild --define "_sourcedir $(shell pwd)/tests/compose/yum" --define "_specdir $(shell pwd)/tests/compose/yum" --define "_builddir $(shell pwd)/tests/compose/yum" \
+		--define "_srcrpmdir $(shell pwd)/tests/compose/yum" --define "_rpmdir $(shell pwd)/tests/compose/yum" --define "_buildrootdir $(shell pwd)/tests/compose/yum/.build" \
+	-ba empty.spec && createrepo --database $(shell pwd)/tests/compose/yum/)
+
+tests/compose/test-repo.repo: tests/compose/test-repo.repo.in
+	cat $< | sed -e "s|%WHERE%|tests/compose/yum/$(shell pwd)|" > $@
+
 tests_jsonutil_CPPFLAGS = -I $(srcdir)/src
 tests_jsonutil_CFLAGS = $(PKGDEP_RPMOSTREE_CFLAGS)
 tests_jsonutil_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostree.la
 
 installed_test_data = tests/libtest.sh
 
+tests/test-compose.sh: tests/compose/test-repo.repo tests/compose/libshadow.so tests/compose/pseudo/bin/pseudo tests/compose/yum/repodata/repomd.xml
+
+EXTRA_DIST += \
+	$(shell (cd tests/compose/pseudo/; git ls-files | sed -e"s|^|tests/compose/pseudo/|g")) \
+	tests/compose/libshadow.c \
+	tests/compose/pseudo \
+	tests/compose/test-repo.json \
+	tests/compose/test-repo.repo.in \
+	tests/compose/yum/empty.c \
+	tests/compose/yum/empty.spec\
+	$(NULL)
+
+
 test_scripts = \
+	tests/test-compose.sh			\
 	tests/test-basic.sh			\
 	$(NULL)
 
