@@ -21,6 +21,8 @@ set -e
 
 . $(dirname $0)/libtest.sh
 
+(test "$(id -u)" = "0") || { echo 1>&2 "$0 can be run only as root"; echo "1..0" ; exit 0; }
+
 echo "1..1"
 
 setup_os_repository "archive-z2" "syslinux"
